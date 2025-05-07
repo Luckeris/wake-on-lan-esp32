@@ -1,14 +1,17 @@
+// wakeonlan_github_version.ino
+
 #include <WiFi.h>
 #include <WebServer.h>
 #include <WiFiUdp.h>
 
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
-uint8_t macAddress[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }; // Target PC MAC
+const char* ssid = "YOUR_SSID";
+const char* password = "YOUR_PASSWORD";
+uint8_t macAddress[] = { 0xXX, 0xXX, 0xXX, 0xXX, 0xXX, 0xXX }; // Replace with your MAC address
 
 WebServer server(80);
 WiFiUDP udp;
 
+// Function to send a Wake-on-LAN packet
 void sendWOL() {
   const int wolPort = 9;
   byte magicPacket[102];
@@ -21,6 +24,7 @@ void sendWOL() {
   udp.endPacket();
 }
 
+// HTML page with visible watermark and logic dependency
 String getHTML() {
   String html = R"rawliteral(
 <!DOCTYPE html>
@@ -80,52 +84,57 @@ String getHTML() {
     .icon {
       font-size: 40px;
     }
-    @media only screen and (max-width: 600px) {
-      body { padding: 10px; }
-      .container { padding: 20px; margin: 20px auto; width: 90%; }
-      h1 { font-size: 1.6em; }
-      button { font-size: 1em; padding: 12px; }
+    .watermark {
+      font-size: 0.75em;
+      color: #444;
+      margin-top: 20px;
     }
-    .lkrs-hidden-token {
-      position: fixed;
-      bottom: 5px;
-      right: 10px;
-      font-size: 10px;
-      color: rgba(255, 255, 255, 0.1);
-      pointer-events: none;
-      user-select: none;
-      z-index: 9999;
+    @media only screen and (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+      .container {
+        padding: 20px;
+        margin: 20px auto;
+        width: 90%;
+      }
+      h1 {
+        font-size: 1.6em;
+      }
+      button {
+        font-size: 1em;
+        padding: 12px;
+      }
     }
   </style>
   <script>
-    setTimeout(() => { location.reload(); }, 30000);
-    function checkSysHook() {
-      const hook = document.getElementById("sys-hook");
-      if (!hook || hook.innerText.trim() !== "luckeris ©") {
-        document.body.innerHTML = "<h1 style='color:red;text-align:center;'>Site broken: unauthorized edit</h1>";
+    window.onload = function() {
+      const wm = document.querySelector('.watermark');
+      if (!wm || wm.innerText.trim() !== 'Made by luckeris') {
+        document.body.innerHTML = "<h2>Unauthorized modification detected.</h2>";
       }
-    }
-    window.onload = checkSysHook;
+    };
   </script>
 </head>
 <body>
   <div class="container">
     <div class="icon">💻</div>
-    <h1>Control Your PC</h1>
+    <h1>PC Control</h1>
     <form action="/on" method="GET">
-      <button class="on">Turn On PC</button>
+      <button class="on">Turn on PC</button>
     </form>
     <form action="/restart" method="GET">
       <button class="restart">Restart ESP32</button>
     </form>
+    <div class="watermark">Made by luckeris</div>
   </div>
-  <div id="sys-hook" class="lkrs-hidden-token">luckeris ©</div>
 </body>
 </html>
 )rawliteral";
   return html;
 }
 
+// HTTP Handlers
 void handleRoot() {
   server.send(200, "text/html; charset=UTF-8", getHTML());
 }
@@ -156,8 +165,8 @@ void handleOn() {
 </head>
 <body>
   <div class='check'>✅</div>
-  <h2>Sending Wake-on-LAN Packet...</h2>
-  <p>You will be redirected in 3 seconds.</p>
+  <h2>PC is powering on...</h2>
+  <p>Redirecting in 3 seconds...</p>
 </body></html>)rawliteral");
 }
 
@@ -186,8 +195,8 @@ void handleRestart() {
 </head>
 <body>
   <div class='check'>🔄</div>
-  <h2>Restarting ESP32...</h2>
-  <p>You will be redirected in 3 seconds.</p>
+  <h2>ESP32 is restarting...</h2>
+  <p>Redirecting in 3 seconds...</p>
 </body></html>)rawliteral");
   delay(1000);
   ESP.restart();
@@ -205,6 +214,7 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   udp.begin(9);
+
   server.on("/", handleRoot);
   server.on("/on", handleOn);
   server.on("/restart", handleRestart);
