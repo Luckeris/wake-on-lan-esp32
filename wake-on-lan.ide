@@ -1,0 +1,228 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <WiFiUdp.h>
+
+// Enter your WiFi configuration, MAC address, and PC IP address
+const char* ssid = "YOUR_SSID";  // Enter your WiFi network name
+const char* password = "YOUR_PASSWORD";  // Enter your WiFi password
+uint8_t macAddress[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };  // Enter the MAC address of the PC
+IPAddress pcIP(192, 168, 1, 100);  // Enter the IP address of the PC (in the network you're using)
+
+WebServer server(80);
+WiFiUDP udp;
+
+// Function to send Wake-on-LAN packet
+void sendWOL() {
+  const int wolPort = 9;
+  byte magicPacket[102];
+  memset(magicPacket, 0xFF, 6);
+  for (int i = 1; i <= 16; i++) {
+    memcpy(&magicPacket[i * 6], macAddress, 6);
+  }
+  udp.beginPacket("255.255.255.255", wolPort);
+  udp.write(magicPacket, sizeof(magicPacket));
+  udp.endPacket();
+}
+
+// HTML page
+String getHTML() {
+  String html = R"rawliteral(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 PC Control</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background-color: #2d2d2d;
+      color: white;
+      text-align: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .container {
+      background-color: rgba(0, 0, 0, 0.85);
+      padding: 30px;
+      border-radius: 15px;
+      max-width: 400px;
+      margin: 50px auto;
+      box-sizing: border-box;
+    }
+    h1 {
+      font-size: 1.8em;
+      margin-bottom: 10px;
+    }
+    button {
+      width: 100%;
+      padding: 15px;
+      font-size: 1.1em;
+      border: none;
+      border-radius: 10px;
+      margin: 10px 0;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .on {
+      background-color: #28a745;
+      color: white;
+    }
+    .on:hover {
+      background-color: #218838;
+    }
+    .restart {
+      background-color: #ffc107;
+      color: black;
+    }
+    .restart:hover {
+      background-color: #e0a800;
+    }
+    .icon {
+      font-size: 40px;
+    }
+
+    @media only screen and (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+      .container {
+        padding: 20px;
+        margin: 20px auto;
+        width: 90%;
+      }
+      h1 {
+        font-size: 1.6em;
+      }
+      button {
+        font-size: 1em;
+        padding: 12px;
+      }
+    }
+  </style>
+  <script>
+    function refreshStatus() {
+      fetch('/status')
+        .then(response => response.text())
+        .then(data => {
+          document.getElementById('statusText').innerHTML = data;
+        });
+    }
+    setInterval(refreshStatus, 30000);  // Refresh the status every 30 seconds
+    window.onload = refreshStatus;
+    // Auto-refresh after turning on the PC or restarting the ESP
+    setTimeout(function() {
+      window.location.reload();
+    }, 3000);  // Reload the page after 3 seconds (after sending WOL or restarting ESP)
+  </script>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">💻</div>
+    <h1>PC Control</h1>
+    <form action="/on" method="GET">
+      <button class="on">Turn On PC</button>
+    </form>
+    <form action="/restart" method="GET">
+      <button class="restart">Restart ESP32</button>
+    </form>
+  </div>
+</body>
+</html>
+)rawliteral";
+  return html;
+}
+
+// HTTP Handlers
+void handleRoot() {
+  server.send(200, "text/html; charset=UTF-8", getHTML());
+}
+
+void handleOn() {
+  sendWOL();
+  server.send(200, "text/html; charset=UTF-8", R"rawliteral(
+<html><head>
+  <meta charset="UTF-8">
+  <meta http-equiv='refresh' content='3;url=/' />
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #222;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+      text-align: center;
+    }
+    .check {
+      font-size: 60px;
+      color: #28a745;
+    }
+  </style>
+</head>
+<body>
+  <div class='check'>✅</div>
+  <h2>The PC is turning on...</h2>
+  <p>You will be redirected in 3 seconds.</p>
+</body></html>)rawliteral");
+}
+
+void handleRestart() {
+  server.send(200, "text/html; charset=UTF-8", R"rawliteral(
+<html><head>
+  <meta charset="UTF-8">
+  <meta http-equiv='refresh' content='3;url=/' />
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #111;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+      text-align: center;
+    }
+    .check {
+      font-size: 60px;
+      color: #ffc107;
+    }
+  </style>
+</head>
+<body>
+  <div class='check'>🔄</div>
+  <h2>ESP32 is restarting...</h2>
+  <p>You will be redirected in 3 seconds.</p>
+</body></html>)rawliteral");
+  delay(1000);
+  ESP.restart();
+}
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected!");
+  Serial.println(WiFi.localIP());
+
+  udp.begin(9);
+
+  server.on("/", handleRoot);
+  server.on("/on", handleOn);
+  server.on("/restart", handleRestart);
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();
+}
